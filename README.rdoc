@@ -9,7 +9,7 @@ The best way to get god is via rubygems:
   
 Copy "config.god" file:
 
-  git clone ""
+  git clone git://github.com/galetahub/simple-god.git
 
 Change constant "APPS_PATH" in "config.god" where your projects in.
 By default:
@@ -21,6 +21,10 @@ To start the god monitoring process:
   sudo god -c /path/to/config.god
 
 == Usage
+
+Now god look at "config/god" folder and load configuration yml files:
+
+  rails_root/config/god/*.yml
 
 Create configuration files in your projects (only you need):
 
