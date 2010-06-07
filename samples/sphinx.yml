@@ -1,0 +1,3 @@
+name: sphinx
+status: on # on | off
+environment: production

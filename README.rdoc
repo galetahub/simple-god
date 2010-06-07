@@ -1,0 +1,43 @@
+= Simple God monitoring
+
+If you have many projects, which should monitor the various processes (shpinx, thin, etc.) - It is something that should.
+
+== Install
+The best way to get god is via rubygems:
+
+  sudo gem install god
+  
+Copy "config.god" file:
+
+  git clone ""
+
+Change constant "APPS_PATH" in "config.god" where your projects in.
+By default:
+
+  APPS_PATH = '/var/www'
+
+To start the god monitoring process:
+
+  sudo god -c /path/to/config.god
+
+== Usage
+
+Create configuration files in your projects (only you need):
+
+  "APPS_PATH/your_project/config/god/delayed_job.yml"
+  "APPS_PATH/your_project/config/god/sphinx.yml"
+  "APPS_PATH/your_project/config/god/thin.yml"
+
+Files "delayed_job.yml", "sphinx.yml" and "thin.yml" you can find in "samples" folder.
+
+== Notice
+IF you change "*/config/god/*.yml" files, you need tell about it to god:
+
+  sudo god -c /path/to/config.god
+
+== Todo
+  * Add more things to monitoring
+  * Make it as a gem
+  * Easy installation
+
+Copyright (c) 2010 Brainberry, released under the MIT license

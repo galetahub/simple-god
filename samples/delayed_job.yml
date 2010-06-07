@@ -1,0 +1,4 @@
+name: delayed_job
+status: on # on | off
+environment: production
+workers: 10

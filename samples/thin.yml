@@ -1,0 +1,6 @@
+name: thin
+status: on # on | off
+servers: 2
+port: 3080
+pid: tmp/pids/thin.pid
+environment: production
