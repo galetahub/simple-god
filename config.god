@@ -10,7 +10,7 @@ class Watcher
   end
   
   def watch
-    Dir[File.join(app_path, 'config', 'god', '*.{yml,yaml}')].each do |filepath|
+    Dir[File.join(@app_path, 'config', 'god', '*.{yml,yaml}')].each do |filepath|
       add(filepath)
     end
   end
