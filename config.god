@@ -207,7 +207,7 @@ class Watcher
             w.log = File.join(@app_path, 'log', 'god.log')
             
             w.interval = 30.seconds
-            w.start = "rake -f #{@app_path}/Rakefile #{config['environment']} jobs:work"
+            w.start = "rake -f #{@app_path}/Rakefile jobs:work RAILS_ENV=#{config['environment']}"
 
             #w.uid = 'git'
             #w.gid = 'git'
