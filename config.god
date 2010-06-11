@@ -15,14 +15,16 @@ class Watcher
     end
   end
   
-  def add(filepath)
-    case File.basename(filepath).downcase
-      when 'delayed_job' then watch_sphinx(filepath)
-      when 'sphinx'      then watch_delayed_job(filepath)
+  def add(filepath, service = nil)
+    service ||= File.basename(File.basename(filepath), File.extname(filepath))
+    
+    case service.to_s.downcase
+      when 'delayed_job' then watch_delayed_job(filepath)
+      when 'sphinx'      then watch_sphinx(filepath)
       when 'thin'        then watch_thin(filepath)
     end
   end
-  
+    
   private
   
     def watch_sphinx(config_path)
@@ -31,11 +33,14 @@ class Watcher
       sphinx_config = "#{@app_path}/config/#{config['environment']}.sphinx.conf"
       sphinx_pid = "#{@app_path}/log/searchd.#{config['environment']}.pid"
 
-      if File.exists?(sphinx_config) && config['status'] == 'on'
+      if File.exists?(sphinx_config) && config['status']
         God.watch do |w|
           w.group = @app_name
           w.name  = w.group + "-" + config['name']
-        
+          
+          w.dir = @app_path
+          w.log = File.join(@app_path, 'log', 'god.log')
+          
           w.interval = 30.seconds
         
           #w.uid = app_config['user']
@@ -85,7 +90,7 @@ class Watcher
       config = YAML.load_file(config_path)
       num_servers = config["servers"] ||= 1
       
-      if config['status'] == 'on'
+      if config['status']
         (0...num_servers).each do |i|
           # UNIX socket cluster use number 0 to 2 (for 3 servers)
           # and tcp cluster use port number 3000 to 3002.
@@ -94,7 +99,10 @@ class Watcher
           God.watch do |w|
             w.group = @app_name
             w.name = w.group + "-" + config['name']
-
+            
+            w.dir = @app_path
+            w.log = File.join(@app_path, 'log', 'god.log')
+          
             w.interval = 20.seconds
             w.grace = 30.seconds
             
@@ -187,13 +195,17 @@ class Watcher
     def watch_delayed_job(config_path)
       config = YAML.load_file(config_path)
       
-      if config['status'] == 'on'
+      if config['status']
         workers = config['workers'] ||= 1 
         
         workers.to_i.times do |num|
           God.watch do |w|
             w.group = @app_name
             w.name = w.group + '-' + config['name'] + "-#{num}"
+            
+            w.dir = @app_path
+            w.log = File.join(@app_path, 'log', 'god.log')
+            
             w.interval = 30.seconds
             w.start = "rake -f #{@app_path}/Rakefile #{config['environment']} jobs:work"
 
@@ -241,6 +253,7 @@ class Watcher
       end # if config['status']
     end # def watch_delayed_job
 end
+
 
 Dir[File.join(APPS_PATH, '*')].select { |dir| File.directory?(dir) }.each do |app_path|
   Watcher.new(app_path).watch
