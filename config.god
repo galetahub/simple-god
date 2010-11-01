@@ -1,12 +1,17 @@
 # == God config file
+#
 require 'yaml'
 
 APPS_PATH = '/var/www'
+
+God.socket_group = 'www-data'
+God.socket_perms = 0775
 
 class Watcher
   def initialize(app_path)
     @app_path = app_path
     @app_name = File.basename(@app_path)
+    @uid = nil
   end
   
   def watch
@@ -22,10 +27,13 @@ class Watcher
       service ||= config['service']
       service ||= File.basename(File.basename(filepath), File.extname(filepath))
       
+      @uid = Etc.getpwuid(File.stat(File.join(@app_path, 'config', 'environment.rb')).uid).name
+      
       case service.to_s.downcase
         when 'delayed_job' then watch_delayed_job(config)
         when 'sphinx'      then watch_sphinx(config)
         when 'thin'        then watch_thin(config)
+        when 'resque'      then watch_resque(config)
       end
     end
   end
@@ -45,10 +53,10 @@ class Watcher
           w.log = File.join(@app_path, 'log', 'god.log')
           w.env = { 'RAILS_ENV' => config['environment'] }
           
-          w.interval = 30.seconds
+          w.interval = 15.seconds
         
-          #w.uid = app_config['user']
-          #w.gid = app_config['group']
+          w.uid = @uid
+          w.gid = @uid
         
           w.start         = "searchd --config #{sphinx_config}"
           w.start_grace   = 10.seconds  
@@ -109,8 +117,8 @@ class Watcher
           w.interval = 20.seconds
           w.grace = 30.seconds
           
-          #w.uid = config["user"]
-          #w.gid = config["group"]
+          w.uid = @uid
+          w.gid = @uid
 
           w.start = "thin start -C #{file} -o #{number}"
           w.stop = "thin stop -C #{file} -o #{number}"
@@ -197,20 +205,29 @@ class Watcher
     def watch_delayed_job(config)
       workers = config['workers'] ||= 1 
       
-      workers.to_i.times do |num|
+      if File.executable?("#{@app_path}/script/delayed_job")
         God.watch do |w|
           w.group = @app_name
-          w.name = w.group + '-' + config['name'] + "-#{num}"
+          w.name = w.group + '-' + config['name']
           
           w.dir = @app_path
           w.log = File.join(@app_path, 'log', 'god.log')
-          w.env = { 'RAILS_ENV' => config['environment'] }
+          w.env = { 
+            'RAILS_ENV' => config['environment'],
+            'PATH' => "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/X11R6/bin"
+          }
           
-          w.interval = 30.seconds
-          w.start = "rake -f #{@app_path}/Rakefile jobs:work"
+          w.interval = 15.seconds
+          w.start = "#{@app_path}/script/delayed_job --pid-dir #{@app_path}/tmp/pids start"
+          w.start_grace = 20.seconds
+          w.stop  = "#{@app_path}/script/delayed_job --pid-dir #{@app_path}/tmp/pids stop"
+          w.stop_grace  = 40.seconds
 
-          #w.uid = 'git'
-          #w.gid = 'git'
+          w.uid = @uid
+          w.gid = @uid
+          
+          w.pid_file = "#{@app_path}/tmp/pids/delayed_job.pid"
+          w.behavior(:clean_pid_file)
 
           # retart if memory gets too high
           w.transition(:up, :restart) do |on|
@@ -249,8 +266,68 @@ class Watcher
             end
           end
         end # God.watch
-      end # workers
+      end # if
     end # watch_delayed_job
+    
+    def watch_resque(config)
+      workers = config['workers'] ||= 1
+
+      workers.to_i.times do |num|
+        God.watch do |w|
+          w.group = @app_name
+          w.name  = "#{w.group}-resque-#{num}"
+
+          w.uid = @uid
+          w.gid = @uid
+
+          w.dir = @app_path
+          w.log = File.join(@app_path, 'log', 'god.log')
+
+          w.env = {"QUEUE"=>"high,low,mailer", "RAILS_ENV"=>config['environment']}
+          w.start = "/usr/local/bin/rake -f #{@app_path}/Rakefile environment resque:work"
+
+          w.interval = 30.seconds
+
+          # retart if memory gets too high
+          w.transition(:up, :restart) do |on|
+            on.condition(:memory_usage) do |c|
+              c.above = 300.megabytes
+              c.times = 2
+            end
+          end
+
+          # determine the state on startup
+          w.transition(:init, { true => :up, false => :start }) do |on|
+            on.condition(:process_running) do |c|
+              c.running = true
+            end
+          end
+
+          # determine when process has finished starting
+          w.transition([:start, :restart], :up) do |on|
+            on.condition(:process_running) do |c|
+              c.running = true
+              c.interval = 5.seconds
+            end
+
+            # failsafe
+            on.condition(:tries) do |c|
+              c.times = 5
+              c.transition = :start
+              c.interval = 5.seconds
+            end
+          end
+
+          # start if process is not running
+          w.transition(:up, :start) do |on|
+            on.condition(:process_running) do |c|
+              c.running = false
+            end
+          end
+        end
+
+      end
+    end # end watch_resque
 end
 
 

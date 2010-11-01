@@ -1,0 +1,4 @@
+name: resque
+status: on # on | off
+environment: production
+workers: 4
